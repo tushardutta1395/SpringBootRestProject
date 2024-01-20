@@ -18,18 +18,15 @@ public class AppUtil {
 
     private static final String PATH = "src\\main\\resources\\static\\uploads\\";
 
-    public static String get_photo_upload_path(final String fiileName, final String folder_name, final Long album_id) throws IOException {
+    public static String get_photo_upload_path(final String fileName, final String folder_name, final Long album_id) throws IOException {
         final var path = PATH + album_id + "\\" + folder_name;
         Files.createDirectories(Paths.get(path));
-        return new File(path).getAbsolutePath() + "\\" + fiileName;
+        return new File(path).getAbsolutePath() + "\\" + fileName;
     }
 
     public static BufferedImage getThumbnail(final MultipartFile originalFile, final Integer width) throws IOException {
         final var img = ImageIO.read(originalFile.getInputStream());
-        final var thumbImg = Scalr.resize(img, Scalr.Method.AUTOMATIC, Scalr.Mode.AUTOMATIC, width, Scalr.OP_ANTIALIAS);
-        // final var tn = new File("src\\main\\resources\\uploads\\temp.jpg").getAbsolutePath();
-        // ImageIO.write(thumbImg, originalFile.getContentType().split("/")[1], tn);
-        return thumbImg;
+        return Scalr.resize(img, Scalr.Method.AUTOMATIC, Scalr.Mode.AUTOMATIC, width, Scalr.OP_ANTIALIAS);
     }
 
     public static Resource getFileAsResource(final Long album_id, final String folder_name, final String file_name) throws IOException {
@@ -43,13 +40,12 @@ public class AppUtil {
         }
     }
 
-    public static boolean delete_photo_from_path(final String fileName, final String folder_name, final Long album_id) {
+    public static Boolean delete_photo_from_path(final String fileName, final String folder_name, final Long album_id) {
         try {
             final var file = new File(PATH + album_id + "\\" + folder_name + "\\" + fileName); // file to be deleted
             return file.delete();
         } catch (final Exception e) {
-            e.printStackTrace();
-            return false;
+            throw new RuntimeException(e);
         }
     }
 }

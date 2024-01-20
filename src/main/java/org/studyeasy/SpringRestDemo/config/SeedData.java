@@ -14,7 +14,7 @@ public class SeedData implements CommandLineRunner {
     private AccountService accountService;
 
     @Override
-    public void run(final String... args) throws Exception {
+    public void run(final String... args) {
         final var account01 = new Account();
         final var account02 = new Account();
 
@@ -25,7 +25,7 @@ public class SeedData implements CommandLineRunner {
 
         account02.setEmail("admin@admin.com");
         account02.setPassword("pass987");
-        account02.setAuthorities(Authority.ADMIN.toString() + " " + Authority.USER.toString());
+        account02.setAuthorities(Authority.ADMIN + " " + Authority.USER);
         accountService.save(account02);
     }
 }

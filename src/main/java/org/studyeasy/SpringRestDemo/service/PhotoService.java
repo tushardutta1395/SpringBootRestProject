@@ -14,8 +14,8 @@ public class PhotoService {
     @Autowired
     private PhotoRepository photoRepository;
 
-    public Photo save(final Photo photo) {
-        return photoRepository.save(photo);
+    public void save(final Photo photo) {
+        photoRepository.save(photo);
     }
 
     public Optional<Photo> findById(final Long id) {

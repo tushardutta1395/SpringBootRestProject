@@ -54,12 +54,6 @@ public class AuthController {
     @Autowired
     private AccountService accountService;
 
-    // public AuthController(final TokenService tokenService, final
-    // AuthenticationManager authenticationManager) {
-    // this.tokenService = tokenService;
-    // this.authenticationManager = authenticationManager;
-    // }
-
     @PostMapping("/token")
     @ResponseStatus(HttpStatus.OK)
     public ResponseEntity<TokenDTO> token(@Valid @RequestBody final UserLoginDTO userLogin)
@@ -70,8 +64,8 @@ public class AuthController {
                             new UsernamePasswordAuthenticationToken(userLogin.getEmail(), userLogin.getPassword()));
             return ResponseEntity.ok(new TokenDTO(tokenService.generateToken(authentication)));
         } catch (final Exception e) {
-            log.debug(AccountError.TOKEN_GENERATION_ERROR.toString() + ": " + e.getMessage());
-            return new ResponseEntity<TokenDTO>(new TokenDTO(null), HttpStatus.BAD_REQUEST);
+            log.debug(AccountError.TOKEN_GENERATION_ERROR + ": " + e.getMessage());
+            return new ResponseEntity<>(new TokenDTO(null), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -88,7 +82,7 @@ public class AuthController {
             accountService.save(account);
             return ResponseEntity.ok(AccountSuccess.ACCOUNT_ADDED.toString());
         } catch (final Exception e) {
-            log.debug(AccountError.ADD_ACCOUNT_ERROR.toString() + ": " + e.getMessage());
+            log.debug(AccountError.ADD_ACCOUNT_ERROR + ": " + e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
         }
     }
@@ -126,7 +120,7 @@ public class AuthController {
                     account.getAuthorities());
             return ResponseEntity.ok(accountViewDTO);
         }
-        return new ResponseEntity<AccountViewDTO>(new AccountViewDTO(), HttpStatus.BAD_REQUEST);
+        return new ResponseEntity<>(new AccountViewDTO(), HttpStatus.BAD_REQUEST);
     }
 
     @GetMapping(value = "/profile", produces = "application/json")
@@ -138,9 +132,12 @@ public class AuthController {
     public ProfileDTO profile(final Authentication authentication) {
         final var email = authentication.getName();
         final var optionalAccount = accountService.findByEmail(email);
-        final var account = optionalAccount.get();
-        final var profileDTO = new ProfileDTO(account.getId(), account.getEmail(), account.getAuthorities());
-        return profileDTO;
+        if (optionalAccount.isPresent()) {
+            final var account = optionalAccount.get();
+            return new ProfileDTO(account.getId(), account.getEmail(), account.getAuthorities());
+        } else {
+            return null;
+        }
     }
 
     @PutMapping(value = "/profile/update-password", produces = "application/json", consumes = "application/json")
@@ -153,11 +150,14 @@ public class AuthController {
             final Authentication authentication) {
         final var email = authentication.getName();
         final var optionalAccount = accountService.findByEmail(email);
-        final var account = optionalAccount.get();
-        account.setPassword(passwordDTO.getPassword());
-        accountService.save(account);
-        final var accountViewDTO = new AccountViewDTO(account.getId(), account.getEmail(), account.getAuthorities());
-        return accountViewDTO;
+        if (optionalAccount.isPresent()) {
+            final var account = optionalAccount.get();
+            account.setPassword(passwordDTO.getPassword());
+            accountService.save(account);
+            return new AccountViewDTO(account.getId(), account.getEmail(), account.getAuthorities());
+        } else {
+            return null;
+        }
     }
 
     @DeleteMapping(value = "/profile/delete")
@@ -173,6 +173,6 @@ public class AuthController {
             accountService.deleteById(optionalAccount.get().getId());
             return ResponseEntity.ok("User deleted");
         }
-        return new ResponseEntity<String>("Bad request", HttpStatus.BAD_REQUEST);
+        return new ResponseEntity<>("Bad request", HttpStatus.BAD_REQUEST);
     }
 }

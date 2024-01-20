@@ -26,12 +26,12 @@ public class AccountService implements UserDetailsService {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
-    public Account save(final Account account) {
+    public void save(final Account account) {
         account.setPassword(passwordEncoder.encode(account.getPassword()));
         if (account.getAuthorities() == null) {
             account.setAuthorities(Authority.USER.toString());
         }
-        return accountRepository.save(account);
+        accountRepository.save(account);
     }
 
     public List<Account> findAll() {
@@ -53,7 +53,7 @@ public class AccountService implements UserDetailsService {
     @Override
     public UserDetails loadUserByUsername(final String email) throws UsernameNotFoundException {
         final var optionalAccount = accountRepository.findByEmail(email);
-        if (!optionalAccount.isPresent()) {
+        if (optionalAccount.isEmpty()) {
             throw new UsernameNotFoundException("Account not found");
         }
         final var account = optionalAccount.get();

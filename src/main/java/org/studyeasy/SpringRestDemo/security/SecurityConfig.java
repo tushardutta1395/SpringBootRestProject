@@ -8,9 +8,9 @@ import org.springframework.security.authentication.dao.DaoAuthenticationProvider
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-// import org.springframework.security.config.annotation.web.configurers.oauth2.server.resource.OAuth2ResourceServerConfigurer;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-// import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -18,7 +18,6 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
-// import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 
 import com.nimbusds.jose.JOSEException;
@@ -45,15 +44,6 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    // @Bean
-    // public InMemoryUserDetailsManager users() {
-    // return new InMemoryUserDetailsManager(
-    // User.withUsername("tushar")
-    // .password("{noop}password")
-    // .authorities("read")
-    // .build());
-    // }
-
     @Bean
     public AuthenticationManager authManager(final UserDetailsService userDetailsService) {
         final var authProvider = new DaoAuthenticationProvider();
@@ -74,23 +64,12 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(final HttpSecurity httpSecurity) throws Exception {
-        // httpSecurity
-        // .authorizeHttpRequests()
-        // .requestMatchers("/token").permitAll()
-        // .requestMatchers("/").permitAll()
-        // .requestMatchers("/swagger-ui/**").permitAll()
-        // .requestMatchers("/v3/api-docs/**").permitAll()
-        // .requestMatchers("/test").authenticated()
-        // .and()
-        // .oauth2ResourceServer(OAuth2ResourceServerConfigurer::jwt)
-        // .sessionManagement(session ->
-        // session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
         httpSecurity
-                // .csrf(csrf -> csrf.ignoringRequestMatchers("/db-console/**"))
-                .headers(headers -> headers.frameOptions(options -> options.sameOrigin()))
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/db-console/**"))
+                .headers(headers -> headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin))
                 .authorizeHttpRequests(requests -> requests
-                        .requestMatchers("/**").permitAll()
+                        .requestMatchers("/").permitAll()
                         .requestMatchers("/api/v1/auth/token").permitAll()
                         .requestMatchers("/api/v1/auth/users/add").permitAll()
                         .requestMatchers("/api/v1/auth/users").hasAuthority("SCOPE_ADMIN")
@@ -98,21 +77,26 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/profile").authenticated()
                         .requestMatchers("/api/v1/auth/profile/update-password").authenticated()
                         .requestMatchers("/api/v1/auth/profile/delete").authenticated()
-                        // .requestMatchers("/").permitAll()
+                        .requestMatchers("/api/v1/albums").authenticated()
+                        .requestMatchers("/api/v1/albums/add").authenticated()
+                        .requestMatchers("/api/v1/albums/{album_id}").authenticated()
+                        .requestMatchers("/api/v1/albums/{album_id}/update").authenticated()
+                        .requestMatchers("/api/v1/albums/{album_id}/upload-photos").authenticated()
+                        .requestMatchers("/albums/{album_id}/photos/{photo_id}/download-photo").authenticated()
+                        .requestMatchers("/albums/{album_id}/photos/{photo_id}/download-thumbnail").authenticated()
+                        .requestMatchers("/albums/{album_id}/photos/{photo_id}/update").authenticated()
+                        .requestMatchers("/albums/{album_id}/photos/{photo_id}/delete").authenticated()
+                        .requestMatchers("/albums/{album_id}/delete").authenticated()
                         .requestMatchers("/swagger-ui/**").permitAll()
                         .requestMatchers("/v3/api-docs/**").permitAll()
-                        // .requestMatchers("/db-console/**").permitAll()
+                        .requestMatchers("/db-console/**").permitAll()
                         .requestMatchers("/test").authenticated())
-                // .oauth2ResourceServer(OAuth2ResourceServerConfigurer :: jwt)
                 .oauth2ResourceServer((oauth2) -> oauth2.jwt(Customizer.withDefaults()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
         // TODO: remove these after upgrading the DB from H2 infile DB
-        // httpSecurity.csrf().disable();
-        // httpSecurity.headers().frameOptions().disable();
-
-        httpSecurity.csrf(csrf -> csrf.disable());
-        httpSecurity.headers(headers -> headers.frameOptions(options -> options.disable()));
+        httpSecurity.csrf(AbstractHttpConfigurer::disable);
+        httpSecurity.headers(headers -> headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::disable));
 
         return httpSecurity.build();
     }

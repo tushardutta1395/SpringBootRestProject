@@ -84,14 +84,18 @@ public class AlbumController {
             album.setDescription(albumPayloadDTO.getDescription());
             final var email = authentication.getName();
             final var optionalAccount = accountService.findByEmail(email);
-            final var account = optionalAccount.get();
-            album.setAccount(account);
-            final var albumNew = albumService.save(album);
-            final var albumViewDTO = new AlbumViewDTO(albumNew.getId(), albumNew.getName(), albumNew.getDescription(),
-                    null);
-            return ResponseEntity.ok(albumViewDTO);
+            if (optionalAccount.isPresent()) {
+                final var account = optionalAccount.get();
+                album.setAccount(account);
+                final var albumNew = albumService.save(album);
+                final var albumViewDTO = new AlbumViewDTO(albumNew.getId(), albumNew.getName(), albumNew.getDescription(),
+                        null);
+                return ResponseEntity.ok(albumViewDTO);
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
+            }
         } catch (final Exception e) {
-            log.debug(AlbumError.ADD_ALBUM_ERROR.toString() + ": " + e.getMessage());
+            log.debug(AlbumError.ADD_ALBUM_ERROR + ": " + e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
         }
     }
@@ -105,18 +109,22 @@ public class AlbumController {
     public List<AlbumViewDTO> albums(final Authentication authentication) {
         final var email = authentication.getName();
         final var optionalAccount = accountService.findByEmail(email);
-        final var account = optionalAccount.get();
-        final var albums = new ArrayList<AlbumViewDTO>();
-        for (final var album : albumService.findByAccountId(account.getId())) {
-            final var photos = new ArrayList<PhotoDTO>();
-            for (final var photo : photoService.findByAlbumId(album.getId())) {
-                final var link = "/albums/" + album.getId() + "/photos/" + photo.getId() + "/download-photo";
-                photos.add(new PhotoDTO(photo.getId(), photo.getName(), photo.getDescription(), photo.getFileName(),
-                        link));
+        if (optionalAccount.isPresent()) {
+            final var account = optionalAccount.get();
+            final var albums = new ArrayList<AlbumViewDTO>();
+            for (final var album : albumService.findByAccountId(account.getId())) {
+                final var photos = new ArrayList<PhotoDTO>();
+                for (final var photo : photoService.findByAlbumId(album.getId())) {
+                    final var link = "/albums/" + album.getId() + "/photos/" + photo.getId() + "/download-photo";
+                    photos.add(new PhotoDTO(photo.getId(), photo.getName(), photo.getDescription(), photo.getFileName(),
+                            link));
+                }
+                albums.add(new AlbumViewDTO(album.getId(), album.getName(), album.getDescription(), photos));
             }
-            albums.add(new AlbumViewDTO(album.getId(), album.getName(), album.getDescription(), photos));
+            return albums;
+        } else {
+            return null;
         }
-        return albums;
     }
 
     @GetMapping(value = "/albums/{album_id}", produces = "application/json")
@@ -129,27 +137,31 @@ public class AlbumController {
             final Authentication authentication) {
         final var email = authentication.getName();
         final var optionalAccount = accountService.findByEmail(email);
-        final var account = optionalAccount.get();
-        final var optionalAlbum = albumService.findById(album_id);
-        Album album;
-        if (optionalAlbum.isPresent()) {
-            album = optionalAlbum.get();
+        if (optionalAccount.isPresent()) {
+            final var account = optionalAccount.get();
+            final var optionalAlbum = albumService.findById(album_id);
+            Album album;
+            if (optionalAlbum.isPresent()) {
+                album = optionalAlbum.get();
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
+            }
+            if (!account.getId().equals(album.getAccount().getId())) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
+            }
+
+            final var photos = new ArrayList<PhotoDTO>();
+            for (final var photo : photoService.findByAlbumId(album.getId())) {
+                final var link = "/albums/" + album.getId() + "/photos/" + photo.getId() + "/download-photo";
+                photos.add(new PhotoDTO(photo.getId(), photo.getName(), photo.getDescription(), photo.getFileName(), link));
+            }
+
+            final var albumViewDTO = new AlbumViewDTO(album.getId(), album.getName(), album.getDescription(), photos);
+
+            return ResponseEntity.ok(albumViewDTO);
         } else {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
         }
-        if (account.getId() != album.getAccount().getId()) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
-        }
-
-        final var photos = new ArrayList<PhotoDTO>();
-        for (final var photo : photoService.findByAlbumId(album.getId())) {
-            final var link = "/albums/" + album.getId() + "/photos/" + photo.getId() + "/download-photo";
-            photos.add(new PhotoDTO(photo.getId(), photo.getName(), photo.getDescription(), photo.getFileName(), link));
-        }
-
-        final var albumViewDTO = new AlbumViewDTO(album.getId(), album.getName(), album.getDescription(), photos);
-
-        return ResponseEntity.ok(albumViewDTO);
     }
 
     @PutMapping(value = "/albums/{album_id}/update", consumes = "application/json", produces = "application/json")
@@ -163,32 +175,36 @@ public class AlbumController {
         try {
             final var email = authentication.getName();
             final var optionalAccount = accountService.findByEmail(email);
-            final var account = optionalAccount.get();
+            if (optionalAccount.isPresent()) {
+                final var account = optionalAccount.get();
 
-            final var optionalAlbum = albumService.findById(album_id);
-            Album album;
-            if (optionalAlbum.isPresent()) {
-                album = optionalAlbum.get();
-                if (account.getId() != album.getAccount().getId()) {
-                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
+                final var optionalAlbum = albumService.findById(album_id);
+                Album album;
+                if (optionalAlbum.isPresent()) {
+                    album = optionalAlbum.get();
+                    if (!account.getId().equals(album.getAccount().getId())) {
+                        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
+                    }
+                } else {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
                 }
+
+                album.setName(albumPayloadDTO.getName());
+                album.setDescription(albumPayloadDTO.getDescription());
+                album = albumService.save(album);
+                final var photos = new ArrayList<PhotoDTO>();
+                for (final var photo : photoService.findByAlbumId(album.getId())) {
+                    final var link = "/albums/" + album.getId() + "/photos/" + photo.getId() + "/download-photo";
+                    photos.add(new PhotoDTO(photo.getId(), photo.getName(), photo.getDescription(), photo.getFileName(),
+                            link));
+                }
+                final var albumViewDTO = new AlbumViewDTO(album.getId(), album.getName(), album.getDescription(), photos);
+                return ResponseEntity.ok(albumViewDTO);
             } else {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
             }
-
-            album.setName(albumPayloadDTO.getName());
-            album.setDescription(albumPayloadDTO.getDescription());
-            album = albumService.save(album);
-            final var photos = new ArrayList<PhotoDTO>();
-            for (final var photo : photoService.findByAlbumId(album.getId())) {
-                final var link = "/albums/" + album.getId() + "/photos/" + photo.getId() + "/download-photo";
-                photos.add(new PhotoDTO(photo.getId(), photo.getName(), photo.getDescription(), photo.getFileName(),
-                        link));
-            }
-            final var albumViewDTO = new AlbumViewDTO(album.getId(), album.getName(), album.getDescription(), photos);
-            return ResponseEntity.ok(albumViewDTO);
         } catch (final Exception e) {
-            log.debug(AlbumError.ADD_ALBUM_ERROR.toString() + ": " + e.getMessage());
+            log.debug(AlbumError.ADD_ALBUM_ERROR + ": " + e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
         }
     }
@@ -198,121 +214,128 @@ public class AlbumController {
     @ApiResponse(responseCode = "400", description = "Please check the payload or token")
     @SecurityRequirement(name = "studyeasy-demo-api")
     public ResponseEntity<ArrayList<HashMap<String, ArrayList<?>>>> photos(
-            @RequestPart(required = true) final MultipartFile[] files,
+            @RequestPart() final MultipartFile[] files,
             @PathVariable final Long album_id, final Authentication authentication) {
         final var email = authentication.getName();
         final var optionalAccount = accountService.findByEmail(email);
-        final var account = optionalAccount.get();
-        final var optionalAlbum = albumService.findById(album_id);
-        Album album;
-        if (optionalAlbum.isPresent()) {
-            album = optionalAlbum.get();
-            if (account.getId() != album.getAccount().getId()) {
+        if (optionalAccount.isPresent()) {
+            final var account = optionalAccount.get();
+            final var optionalAlbum = albumService.findById(album_id);
+            Album album;
+            if (optionalAlbum.isPresent()) {
+                album = optionalAlbum.get();
+                if (!account.getId().equals(album.getAccount().getId())) {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
+                }
+            } else {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
             }
+            final var fileNamesWithSuccess = new ArrayList<PhotoViewDTO>();
+            final var fileNamesWithError = new ArrayList<String>();
+            Arrays.asList(files).forEach(file -> {
+                final var contentType = file.getContentType();
+                if ((contentType != null && contentType.equals("image/png")) || (contentType != null && contentType.equals("image/jpg"))
+                        || (contentType != null && contentType.equals("image/jpeg"))) {
+                    final var length = 10;
+                    final var useLetters = true;
+                    final var useNumbers = true;
+                    try {
+                        final var fileName = file.getOriginalFilename();
+                        final var generatedString = RandomStringUtils.random(length, useLetters, useNumbers);
+                        final var final_photo_name = generatedString + fileName;
+                        final var absolute_fileLocation = AppUtil.get_photo_upload_path(final_photo_name,
+                                PHOTOS_FOLDER_NAME, album_id);
+                        final var path = Paths.get(absolute_fileLocation);
+                        Files.copy(file.getInputStream(), path, StandardCopyOption.REPLACE_EXISTING);
+                        final var photo = new Photo();
+                        photo.setName(fileName);
+                        photo.setFileName(final_photo_name);
+                        photo.setOriginalFileName(fileName);
+                        photo.setAlbum(album);
+                        photoService.save(photo);
+
+                        final var photoViewDTO = new PhotoViewDTO(photo.getId(), photo.getName(), photo.getDescription());
+                        fileNamesWithSuccess.add(photoViewDTO);
+
+                        final var thumbImg = AppUtil.getThumbnail(file, THUMBNAIL_WIDTH);
+                        final var thumbnail_location = new File(
+                                AppUtil.get_photo_upload_path(final_photo_name, THUMBNAIL_FOLDER_NAME, album_id));
+                        ImageIO.write(thumbImg, file.getContentType().split("/")[1], thumbnail_location);
+                    } catch (final Exception e) {
+                        log.debug(AlbumError.PHOTO_UPLOAD_ERROR + ": " + e.getMessage());
+                        fileNamesWithError.add(file.getOriginalFilename());
+                    }
+                } else {
+                    fileNamesWithError.add(file.getOriginalFilename());
+                }
+            });
+            final var result = new HashMap<String, ArrayList<?>>();
+            result.put("SUCCESS", fileNamesWithSuccess);
+            result.put("ERRORS", fileNamesWithError);
+            final var response = new ArrayList<HashMap<String, ArrayList<?>>>();
+            response.add(result);
+            return ResponseEntity.ok(response);
         } else {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
         }
-        final var fileNamesWithSuccess = new ArrayList<PhotoViewDTO>();
-        final var fileNamesWithError = new ArrayList<String>();
-        Arrays.asList(files).stream().forEach(file -> {
-            final var contentType = file.getContentType();
-            if (contentType.equals("image/png") || contentType.equals("image/jpg")
-                    || contentType.equals("image/jpeg")) {
-                // fileNamesWithSuccess.add(file.getOriginalFilename());
-                final var length = 10;
-                final var useLetters = true;
-                final var useNumbers = true;
-                try {
-                    final var fileName = file.getOriginalFilename();
-                    final var generatedString = RandomStringUtils.random(length, useLetters, useNumbers);
-                    final var final_photo_name = generatedString + fileName;
-                    final var absolute_fileLocation = AppUtil.get_photo_upload_path(final_photo_name,
-                            PHOTOS_FOLDER_NAME, album_id);
-                    final var path = Paths.get(absolute_fileLocation);
-                    Files.copy(file.getInputStream(), path, StandardCopyOption.REPLACE_EXISTING);
-                    final var photo = new Photo();
-                    photo.setName(fileName);
-                    photo.setFileName(final_photo_name);
-                    photo.setOriginalFileName(fileName);
-                    photo.setAlbum(album);
-                    photoService.save(photo);
-
-                    final var photoViewDTO = new PhotoViewDTO(photo.getId(), photo.getName(), photo.getDescription());
-                    fileNamesWithSuccess.add(photoViewDTO);
-
-                    final var thumbImg = AppUtil.getThumbnail(file, THUMBNAIL_WIDTH);
-                    final var thumbnail_location = new File(
-                            AppUtil.get_photo_upload_path(final_photo_name, THUMBNAIL_FOLDER_NAME, album_id));
-                    ImageIO.write(thumbImg, file.getContentType().split("/")[1], thumbnail_location);
-                } catch (final Exception e) {
-                    log.debug(AlbumError.PHOTO_UPLOAD_ERROR.toString() + ": " + e.getMessage());
-                    fileNamesWithError.add(file.getOriginalFilename());
-                }
-            } else {
-                fileNamesWithError.add(file.getOriginalFilename());
-            }
-        });
-        final var result = new HashMap<String, ArrayList<?>>();
-        result.put("SUCCESS", fileNamesWithSuccess);
-        result.put("ERRORS", fileNamesWithError);
-        final var response = new ArrayList<HashMap<String, ArrayList<?>>>();
-        response.add(result);
-        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/albums/{album_id}/photos/{photo_id}/download-photo")
     @SecurityRequirement(name = "studyeasy-demo-api")
     public ResponseEntity<?> downloadPhoto(@PathVariable("album_id") final Long album_id,
             @PathVariable("photo_id") final Long photo_id, final Authentication authentication) {
-        return downloadFile(album_id, photo_id, PHOTOS_FOLDER_NAME, authentication);
+        return downloadFile(album_id, photo_id, authentication);
     }
 
     @GetMapping("/albums/{album_id}/photos/{photo_id}/download-thumbnail")
     @SecurityRequirement(name = "studyeasy-demo-api")
     public ResponseEntity<?> downloadThumbnail(@PathVariable("album_id") final Long album_id,
             @PathVariable("photo_id") final Long photo_id, final Authentication authentication) {
-        return downloadFile(album_id, photo_id, THUMBNAIL_FOLDER_NAME, authentication);
+        return downloadFile(album_id, photo_id, authentication);
     }
 
-    public ResponseEntity<?> downloadFile(final Long album_id, final Long photo_id, final String folder_name,
-            final Authentication authentication) {
+    public ResponseEntity<?> downloadFile(final Long album_id, final Long photo_id,
+                                          final Authentication authentication) {
         final var email = authentication.getName();
         final var optionalAccount = accountService.findByEmail(email);
-        final var account = optionalAccount.get();
+        if (optionalAccount.isPresent()) {
+            final var account = optionalAccount.get();
 
-        final var optionalAlbum = albumService.findById(album_id);
-        Album album;
-        if (optionalAlbum.isPresent()) {
-            album = optionalAlbum.get();
-            if (account.getId() != album.getAccount().getId()) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
+            final var optionalAlbum = albumService.findById(album_id);
+            Album album;
+            if (optionalAlbum.isPresent()) {
+                album = optionalAlbum.get();
+                if (!account.getId().equals(album.getAccount().getId())) {
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
+                }
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
             }
-        } else {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
-        }
-        final var optionalPhoto = photoService.findById(photo_id);
-        if (optionalPhoto.isPresent()) {
-            final var photo = optionalPhoto.get();
-            if (photo.getAlbum().getId() != album_id) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
-            }
-            Resource resource = null;
-            try {
-                resource = AppUtil.getFileAsResource(album_id, PHOTOS_FOLDER_NAME, photo.getFileName());
-            } catch (final IOException e) {
-                return ResponseEntity.internalServerError().build();
-            }
-            if (resource == null) {
-                return new ResponseEntity<>("File not found", HttpStatus.NOT_FOUND);
-            }
-            final var contentType = "application/octet-stream";
-            final var headerValue = "attachment; filename=\"" + photo.getOriginalFileName() + "\"";
+            final var optionalPhoto = photoService.findById(photo_id);
+            if (optionalPhoto.isPresent()) {
+                final var photo = optionalPhoto.get();
+                if (!photo.getAlbum().getId().equals(album_id)) {
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
+                }
+                Resource resource;
+                try {
+                    resource = AppUtil.getFileAsResource(album_id, PHOTOS_FOLDER_NAME, photo.getFileName());
+                } catch (final IOException e) {
+                    return ResponseEntity.internalServerError().build();
+                }
+                if (resource == null) {
+                    return new ResponseEntity<>("File not found", HttpStatus.NOT_FOUND);
+                }
+                final var contentType = "application/octet-stream";
+                final var headerValue = "attachment; filename=\"" + photo.getOriginalFileName() + "\"";
 
-            return ResponseEntity.ok()
-                    .contentType(MediaType.parseMediaType(contentType))
-                    .header(HttpHeaders.CONTENT_DISPOSITION, headerValue)
-                    .body(resource);
+                return ResponseEntity.ok()
+                        .contentType(MediaType.parseMediaType(contentType))
+                        .header(HttpHeaders.CONTENT_DISPOSITION, headerValue)
+                        .body(resource);
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
+            }
         } else {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
         }
@@ -329,30 +352,34 @@ public class AlbumController {
         try {
             final var email = authentication.getName();
             final var optionalAccount = accountService.findByEmail(email);
-            final var account = optionalAccount.get();
+            if (optionalAccount.isPresent()) {
+                final var account = optionalAccount.get();
 
-            final var optionalAlbum = albumService.findById(album_id);
-            Album album;
-            if (optionalAlbum.isPresent()) {
-                album = optionalAlbum.get();
-                if (account.getId() != album.getAccount().getId()) {
-                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
+                final var optionalAlbum = albumService.findById(album_id);
+                Album album;
+                if (optionalAlbum.isPresent()) {
+                    album = optionalAlbum.get();
+                    if (!account.getId().equals(album.getAccount().getId())) {
+                        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
+                    }
+                } else {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
                 }
-            } else {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
-            }
-            final var optionalPhoto = photoService.findById(photo_id);
-            if (optionalPhoto.isPresent()) {
-                final var photo = optionalPhoto.get();
-                if (photo.getAlbum().getId() != album_id) {
-                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
+                final var optionalPhoto = photoService.findById(photo_id);
+                if (optionalPhoto.isPresent()) {
+                    final var photo = optionalPhoto.get();
+                    if (!photo.getAlbum().getId().equals(album_id)) {
+                        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
+                    }
+                    photo.setName(photoPayloadDTO.getName());
+                    photo.setDescription(photoPayloadDTO.getDescription());
+                    photoService.save(photo);
+                    final var photoViewDTO = new PhotoViewDTO(photo.getId(), photoPayloadDTO.getName(),
+                            photoPayloadDTO.getDescription());
+                    return ResponseEntity.ok(photoViewDTO);
+                } else {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
                 }
-                photo.setName(photoPayloadDTO.getName());
-                photo.setDescription(photoPayloadDTO.getDescription());
-                photoService.save(photo);
-                final var photoViewDTO = new PhotoViewDTO(photo.getId(), photoPayloadDTO.getName(),
-                        photoPayloadDTO.getDescription());
-                return ResponseEntity.ok(photoViewDTO);
             } else {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
             }
@@ -370,31 +397,38 @@ public class AlbumController {
         try {
             final var email = authentication.getName();
             final var optionalAccount = accountService.findByEmail(email);
-            final var account = optionalAccount.get();
+            if (optionalAccount.isPresent()) {
+                final var account = optionalAccount.get();
 
-            final var optionalAlbum = albumService.findById(album_id);
-            Album album;
-            if (optionalAlbum.isPresent()) {
-                album = optionalAlbum.get();
-                if (account.getId() != album.getAccount().getId()) {
-                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
-                }
-            } else {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
-            }
-
-            final var optionalPhoto = photoService.findById(photo_id);
-            if (optionalPhoto.isPresent()) {
-                final var photo = optionalPhoto.get();
-                if (photo.getAlbum().getId() != album_id) {
-                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
+                final var optionalAlbum = albumService.findById(album_id);
+                Album album;
+                if (optionalAlbum.isPresent()) {
+                    album = optionalAlbum.get();
+                    if (!account.getId().equals(album.getAccount().getId())) {
+                        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
+                    }
+                } else {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
                 }
 
-                AppUtil.delete_photo_from_path(photo.getFileName(), PHOTOS_FOLDER_NAME, album_id);
-                AppUtil.delete_photo_from_path(photo.getFileName(), THUMBNAIL_FOLDER_NAME, album_id);
-                photoService.delete(photo);
+                final var optionalPhoto = photoService.findById(photo_id);
+                if (optionalPhoto.isPresent()) {
+                    final var photo = optionalPhoto.get();
+                    if (!photo.getAlbum().getId().equals(album_id)) {
+                        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
+                    }
 
-                return ResponseEntity.status(HttpStatus.ACCEPTED).body(null);
+                    final var delete_photo = AppUtil.delete_photo_from_path(photo.getFileName(), PHOTOS_FOLDER_NAME, album_id);
+                    final var delete_thumbnail = AppUtil.delete_photo_from_path(photo.getFileName(), THUMBNAIL_FOLDER_NAME, album_id);
+                    if (delete_photo && delete_thumbnail) {
+                        photoService.delete(photo);
+                        return ResponseEntity.status(HttpStatus.ACCEPTED).body(null);
+                    } else {
+                        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
+                    }
+                } else {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
+                }
             } else {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
             }
@@ -412,26 +446,30 @@ public class AlbumController {
         try {
             final var email = authentication.getName();
             final var optionalAccount = accountService.findByEmail(email);
-            final var account = optionalAccount.get();
+            if (optionalAccount.isPresent()) {
+                final var account = optionalAccount.get();
 
-            final var optionalAlbum = albumService.findById(album_id);
-            Album album;
-            if (optionalAlbum.isPresent()) {
-                album = optionalAlbum.get();
-                if (account.getId() != album.getAccount().getId()) {
-                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
+                final var optionalAlbum = albumService.findById(album_id);
+                Album album;
+                if (optionalAlbum.isPresent()) {
+                    album = optionalAlbum.get();
+                    if (!account.getId().equals(album.getAccount().getId())) {
+                        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
+                    }
+                } else {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
                 }
+
+                for (final var photo : photoService.findByAlbumId(album.getId())) {
+                    AppUtil.delete_photo_from_path(photo.getFileName(), PHOTOS_FOLDER_NAME, album_id);
+                    AppUtil.delete_photo_from_path(photo.getFileName(), THUMBNAIL_FOLDER_NAME, album_id);
+                    photoService.delete(photo);
+                }
+                albumService.deleteAlbum(album);
+                return ResponseEntity.status(HttpStatus.ACCEPTED).body(null);
             } else {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
             }
-
-            for (final var photo : photoService.findByAlbumId(album.getId())) {
-                AppUtil.delete_photo_from_path(photo.getFileName(), PHOTOS_FOLDER_NAME, album_id);
-                AppUtil.delete_photo_from_path(photo.getFileName(), THUMBNAIL_FOLDER_NAME, album_id);
-                photoService.delete(photo);
-            }
-            albumService.deleteAlbum(album);
-            return ResponseEntity.status(HttpStatus.ACCEPTED).body(null);
         } catch (final Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
         }
